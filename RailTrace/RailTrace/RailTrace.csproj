@@ -45,6 +45,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config.secure" />
+    <None Include="test.secure" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
