@@ -5,6 +5,8 @@ VisualStudioVersion = 15.0.26430.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RailTrace", "RailTrace\RailTrace.csproj", "{59F237E3-6713-48C4-811B-1404FD32C3A1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RailTrace.Tests", "RailTrace.Tests\RailTrace.Tests.csproj", "{1041F0D7-8280-4B53-A653-B32BCAEC6DB9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{59F237E3-6713-48C4-811B-1404FD32C3A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{59F237E3-6713-48C4-811B-1404FD32C3A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{59F237E3-6713-48C4-811B-1404FD32C3A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1041F0D7-8280-4B53-A653-B32BCAEC6DB9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1041F0D7-8280-4B53-A653-B32BCAEC6DB9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1041F0D7-8280-4B53-A653-B32BCAEC6DB9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1041F0D7-8280-4B53-A653-B32BCAEC6DB9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
