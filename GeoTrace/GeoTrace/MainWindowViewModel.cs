@@ -60,7 +60,12 @@ namespace GeoTrace
                 var client_info_tmp = await ExecuteCommandAsync(client, "nvram get client_info_tmp");
                 var client_info_tmp_clean = client_info_tmp.Split(',');
                 var custom_clientlist = await ExecuteCommandAsync(client, "nvram get custom_clientlist");
-              
+
+                //nmp_custom_clientlist give list of all clients that have been connected?
+                var nmp_custom_clientlist = await ExecuteCommandAsync(client, "cat /jffs/nmp_client_list");
+
+                var dnsmasq_leases = await ExecuteCommandAsync(client, "cat /var/lib/misc/dnsmasq.leases");
+               
 
                 return connectionList;
             }

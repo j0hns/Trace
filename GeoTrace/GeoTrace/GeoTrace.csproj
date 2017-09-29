@@ -118,5 +118,8 @@
   <ItemGroup>
     <Resource Include="License.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <Resource Include="debug notes.txt" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
