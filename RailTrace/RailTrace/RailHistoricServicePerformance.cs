@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
@@ -17,27 +18,87 @@ namespace RailTrace
 
         
 
-        public static Response GetData(Request request)
+        public static ServiceMetricsResponse GetServiceMetrics(ServiceMetricsRequest serviceMetricsRequest)
         {
-            var payloadJson= JsonConvert.SerializeObject(request);
-            var url = ConfigurationManager.AppSettings["ServiceMetricsUrl"];
-            var user = ConfigurationManager.AppSettings["UserEmail"];
-            var pwd = ConfigurationManager.AppSettings["UserPwd"];
-            var authenticationHeaderContents= Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($"{user}:{pwd}"));
-
-
-            using (var webClient=new WebClient())
-            {
-              
-                webClient.Headers["Content-Type"] = "application/json";
-                webClient.Headers["Authorization"] = $"Basic {authenticationHeaderContents}";
-              
-                var data =webClient.UploadString(url, payloadJson);
-                return JsonConvert.DeserializeObject<Response>(data);
-            }
+            return GetData<ServiceMetricsRequest, ServiceMetricsResponse>(ConfigurationManager.AppSettings["ServiceMetricsUrl"], serviceMetricsRequest);
         }
 
-        public class Request
+        public static ServiceDetailResponse GetServiceDetail(ServiceDetailRequest serviceDetailRequest)
+        {
+            return GetData<ServiceDetailRequest, ServiceDetailResponse>(ConfigurationManager.AppSettings["ServiceDetailUrl"] , serviceDetailRequest);
+        }
+
+        private static TResponse GetData<TRequest,TResponse>(string url,TRequest request)
+        {
+            var payloadJson = JsonConvert.SerializeObject(request);
+            var user = ConfigurationManager.AppSettings["UserEmail"];
+            var pwd = ConfigurationManager.AppSettings["UserPwd"];
+            var authenticationHeaderContents = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{user}:{pwd}"));
+
+
+            using (var webClient = new WebClient())
+            {
+
+                webClient.Headers["Content-Type"] = "application/json";
+                webClient.Headers["Authorization"] = $"Basic {authenticationHeaderContents}";
+
+                var data = webClient.UploadString(url, payloadJson);
+                Debug.WriteLine(data);
+                return JsonConvert.DeserializeObject<TResponse>(data);
+            }
+        }
+        public class ServiceDetailRequest
+        {
+            [JsonProperty("rid")]
+            public string Rid { get; set; }
+        }
+
+        public class ServiceDetailResponse
+        {
+            public class LocationInfo
+            {
+
+                [JsonProperty("location")]
+                public string Location { get; set; }
+
+              
+                [JsonProperty("gbtt_ptd")]
+                public string DepartureTime { get; set; }
+
+                [JsonProperty("gbtt_pta")]
+                public string ArrivalTime { get; set; }
+
+                [JsonProperty("actual_td")]
+                public string ActualDepartureTime { get; set; }
+
+                [JsonProperty("actual_ta")]
+                public string ActualArrivalTime { get; set; }
+
+                [JsonProperty("late_canc_reason")]
+                public string Reason { get; set; }
+            }
+
+            public class ServiceAttributesDetailsInfo
+            {
+                [JsonProperty("date_of_service")]
+                public string DateOfService { get; set; }
+
+                [JsonProperty("toc_code")]
+                public string TocCode { get; set; }
+
+                [JsonProperty("rid")]
+                public string Rid { get; set; }
+
+                [JsonProperty("locations")]
+                public LocationInfo[] Locations { get; set; }
+            }
+
+            [JsonProperty("serviceAttributesDetails")]
+            public ServiceAttributesDetailsInfo ServiceAttributesDetails { get; set; }
+           
+        }
+
+        public class ServiceMetricsRequest
         {
             
             [JsonProperty("from_loc")]
@@ -69,14 +130,14 @@ namespace RailTrace
             public double tolerance2 { get; set; }
         }
 
-        public class Response
+        public class ServiceMetricsResponse
         {
             public class ResponseHeader
             {
-                [JsonProperty("from_loc")]
+                [JsonProperty("from_location")]
                 public string FromLoc { get; set; }
 
-                [JsonProperty("to_loc")]
+                [JsonProperty("to_location")]
                 public string ToLoc { get; set; }
 
             }
@@ -146,7 +207,9 @@ namespace RailTrace
                 }
 
                 public ResponseServiceAttributesMetrics ServiceAttributesMetrics { get; set; }
-                public ResponseMetrics Metrics { get; set; }
+                public ResponseMetrics[] Metrics { get; set; }
+
+            
             }
 
            
