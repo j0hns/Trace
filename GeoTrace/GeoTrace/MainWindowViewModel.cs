@@ -1,13 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Configuration;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Controls;
+using System.Windows.Input;
+using DevExpress.Mvvm;
+using GeoTrace.Annotations;
 using MaxMind.GeoIP2;
 using MaxMind.GeoIP2.Responses;
 using Microsoft.Maps.MapControl.WPF;
@@ -15,13 +20,15 @@ using PrimS.Telnet;
 
 namespace GeoTrace
 {
-    public class MainWindowViewModel
+    public class MainWindowViewModel : INotifyPropertyChanged
     {
         private readonly Map _map;
         private MapLayer _pinLayer;
         private string _routerUri;
         private List<KnownDevice> _knownDevices = new List<KnownDevice>();
         private Dictionary<string, KnownDevice> _ipToMac = new Dictionary<string, KnownDevice>();
+        private List<TraceRouteInfo> _currentConnections;
+        private string _message;
 
 
         public MainWindowViewModel(Map map)
@@ -30,6 +37,7 @@ namespace GeoTrace
             _map = map;
             _pinLayer = new MapLayer();
             _map.Children.Add(_pinLayer);
+            RefreshCommand = new DelegateCommand(Run);
 
         }
 
@@ -37,23 +45,168 @@ namespace GeoTrace
         {
 
             var connections = await GetConnectionInfo();
+            AddSourceNameFromKnownDevices(connections);
+            AddCityInfo(connections);
             PlotConnections(connections);
+           
+        
+            Task.Run(() => AddHostInfo(connections));
+
 
         }
 
-
-        public class TraceRouteInfo
+        private void AddSourceNameFromKnownDevices(List<TraceRouteInfo> connections)
         {
-            public string Protocol { get; set; }
-            public string SourceIpAddress { get; set; }
-            public string SourcePort { get; set; }
-            public string DestinationIpAddress { get; set; }
-            public string DestinationPort { get; set; }
-            public string Status { get; set; }
-            public string SourceName { get; set; }
-            public string SourceMAC { get; set; }
-            public string DestinationName { get; set; }
+            string sourceText = "Unknown Source";
+
+            foreach (var connection in connections)
+            {
+                KnownDevice sourceDevice = null;
+                if (_ipToMac.TryGetValue(connection.SourceIpAddress, out sourceDevice))
+                {
+                    connection.SourceName = sourceDevice.Name;
+                }
+            }
         }
+
+        public string Message
+        {
+            get { return _message; }
+            set
+            {
+                if (value == _message) return;
+                _message = value;
+                OnPropertyChanged();
+            }
+        }
+
+        private void AddHostInfo(List<TraceRouteInfo> connections)
+        {
+            foreach (var connection in connections)
+            {
+
+
+                try
+                {
+                    var ipDestination = Dns.GetHostEntry(connection.DestinationIpAddress);
+                    connection.DestinationName = ipDestination.HostName;
+
+                }
+                catch (Exception e)
+                {
+                    Debug.WriteLine($"Error on resolving IP address {connection.DestinationIpAddress}" + e);
+
+                }
+
+                if (connection.SourceName == null)
+                {
+                    try
+                    {
+                        var ipSource = Dns.GetHostEntry(connection.SourceIpAddress);
+                        connection.SourceName = ipSource.HostName;
+
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.WriteLine($"Error on resolving IP address {connection.SourceIpAddress}" + e);
+
+                    }
+                }
+
+
+            }
+
+        }
+
+        private void AddCityInfo(List<TraceRouteInfo> connections)
+        {
+            CityResponse city = null;
+            // This creates the DatabaseReader object, which should be reused across
+            // lookups.
+            using (var reader =
+                new DatabaseReader(
+                    @"C:\Users\johns\Downloads\GeoLite2-City_20170905\GeoLite2-City_20170905\GeoLite2-City.mmdb"))
+            {
+                foreach (var connection in connections)
+                {
+
+                    try
+                    {
+
+                        city = reader.City(connection.DestinationIpAddress);
+                        connection.DestinationCity = city;
+
+
+
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.WriteLine($"Error on lookup IP address {connection.SourceIpAddress}" + e);
+
+                    }
+                }
+            }
+        }
+
+        public List<TraceRouteInfo> CurrentConnections
+        {
+            get { return _currentConnections; }
+            set
+            {
+                if (Equals(value, _currentConnections)) return;
+                _currentConnections = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public ICommand RefreshCommand { get; set; }
+
+
+        private void PlotConnections(List<TraceRouteInfo> connections)
+        {
+            _map.Children.Clear();
+            CurrentConnections = connections;
+
+
+            foreach (var connection in connections)
+            {
+
+
+
+
+
+                if (connection.DestinationCity != null && connection.DestinationCity.Location != null && connection.DestinationCity.Location.HasCoordinates)
+                {
+
+                    Pushpin pin = new Pushpin
+                    {
+                        Location = new Location(connection.DestinationCity.Location.Latitude.Value, connection.DestinationCity.Location.Longitude.Value)
+                    };
+
+
+
+
+
+
+
+                    _pinLayer.AddChild(new TextBox() { Text = $"'{connection.SourceName}'\r\nto\r\n'{connection.DestinationCity.City}' ({connection.DestinationName})\r\n[{connection.Status}]" }, pin.Location);
+                    // Adds the pushpin to the map.
+                    _map.Children.Add(pin);
+                }
+                else
+                {
+                    //unknown city
+                    Debug.WriteLine($"Unknown location for IP address {connection.SourceIpAddress}");
+                }
+
+
+
+            }
+
+
+
+        }
+
         public async Task<List<TraceRouteInfo>> GetConnectionInfo()
         {
 
@@ -83,7 +236,7 @@ namespace GeoTrace
                     var knownDevice = _knownDevices.FirstOrDefault(x => x.MAC == mac);
                     if (knownDevice == null)
                     {
-                         knownDevice = new KnownDevice { MAC = mac, Name = name };
+                        knownDevice = new KnownDevice { MAC = mac, Name = name };
                         _knownDevices.Add(knownDevice);
                     }
                     AddIpToMac(ip, knownDevice);
@@ -97,10 +250,10 @@ namespace GeoTrace
                     var mac = parts[3].ToLower().Replace(":", "");
 
                     var knownDevice = _knownDevices.FirstOrDefault(x => x.MAC == mac);
-                    if (knownDevice==null)
+                    if (knownDevice == null)
                     {
                         knownDevice = new KnownDevice { MAC = mac, Name = name };
-                        
+
                         _knownDevices.Add(knownDevice);
                     }
 
@@ -108,16 +261,16 @@ namespace GeoTrace
 
                 }
 
-                foreach (var item in customList.Where(x=>x.Trim()!=""))
+                foreach (var item in customList.Where(x => x.Trim() != ""))
                 {
                     var parts = item.Split('>');
                     var name = parts[0];
                     var mac = parts[1].ToLower().Replace(":", "");
 
-                    var knownDevice = _knownDevices.FirstOrDefault(x => x.MAC== mac);
+                    var knownDevice = _knownDevices.FirstOrDefault(x => x.MAC == mac);
                     if (knownDevice == null)
                     {
-                        knownDevice= new KnownDevice { MAC = mac, Name = name };
+                        knownDevice = new KnownDevice { MAC = mac, Name = name };
                         _knownDevices.Add(knownDevice);
                     }
 
@@ -155,17 +308,6 @@ namespace GeoTrace
             _ipToMac.Add(ip, device);
         }
 
-        public class KnownDevice
-        {
-            public string MAC { get; set; }
-            public string Name { get; set; }
-
-            public override string ToString()
-            {
-                return $"{Name} - {MAC}";
-            }
-        }
-
         private static async Task<string> ExecuteCommandAsync(Client client, string command)
         {
             await client.WriteLine(command);
@@ -180,8 +322,6 @@ namespace GeoTrace
 
             return result;
         }
-
-     
 
         private static async Task<List<TraceRouteInfo>> GetIpConnections(Client client)
         {
@@ -204,19 +344,8 @@ namespace GeoTrace
                     DestinationPort = destinationAddressParts.Length > 1 ? destinationAddressParts[1] : null,
                     Status = lineParts[3]
                 };
-                try
-                {
-                    var ipDestination = Dns.GetHostEntry(connection.DestinationIpAddress);
-                    connection.DestinationName = ipDestination.HostName;
-                }
-                catch (Exception e)
-                {
-                    Debug.WriteLine($"Error on resolving IP address {connection.DestinationIpAddress}" + e);
-                 
-                }
-               
-                //var ipSource = Dns.GetHostEntry(connection.SourceIpAddress);
-               // connection.SourceName= ipSource.HostName;
+
+
                 connections.Add(connection);
             }
 
@@ -224,65 +353,12 @@ namespace GeoTrace
         }
 
 
-        private void PlotConnections(List<TraceRouteInfo> connections)
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        [NotifyPropertyChangedInvocator]
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
         {
-            CityResponse city = null;
-            // This creates the DatabaseReader object, which should be reused across
-            // lookups.
-            using (var reader = new DatabaseReader(@"C:\Users\johns\Downloads\GeoLite2-City_20170905\GeoLite2-City_20170905\GeoLite2-City.mmdb"))
-            {
-                foreach (var connection in connections)
-                {
-
-                    try
-                    {
-
-
-                        // Replace "City" with the appropriate method for your database, e.g.,
-                        // "Country".
-                        city = reader.City(connection.DestinationIpAddress);
-
-                        var cityLocation = city.Location;
-                        var cityName = city.City.Name;
-
-                        if (cityName != null && cityLocation != null && cityLocation.HasCoordinates)
-                        {
-
-                            Pushpin pin = new Pushpin
-                            {
-                                Location = new Location(cityLocation.Latitude.Value, cityLocation.Longitude.Value)
-                            };
-
-                            KnownDevice sourceDevice = null;
-                            string sourceText = "Unknown Source";
-                            if (_ipToMac.TryGetValue(connection.SourceIpAddress, out sourceDevice))
-                            {
-                                sourceText = sourceDevice.Name;
-                            }
-
-
-
-                            _pinLayer.AddChild(new TextBox() { Text = $"'{sourceText}'\r\nto\r\n'{cityName}' ({connection.DestinationName})\r\n[{connection.Status}]" }, pin.Location);
-                            // Adds the pushpin to the map.
-                            _map.Children.Add(pin);
-                        }
-                        else
-                        {
-                            //unknown city
-                            Debug.WriteLine($"Failed to lookup IP address {connection.SourceIpAddress}");
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.WriteLine($"Error on lookup IP address {connection.SourceIpAddress}" + e);
-
-                    }
-                }
-            }
-
-
-
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
-
     }
 }
